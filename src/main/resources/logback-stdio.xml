@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Console appender that writes to STDERR only -->
+    <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Root logger - only ERROR level to stderr -->
+    <root level="ERROR">
+        <appender-ref ref="STDERR" />
+    </root>
+    
+    <!-- Our application logger - INFO level to stderr for debugging -->
+    <logger name="com.serpapi.flightmcp" level="INFO" additivity="false">
+        <appender-ref ref="STDERR" />
+    </logger>
+</configuration>
