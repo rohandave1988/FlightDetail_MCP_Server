@@ -2,6 +2,8 @@ package com.serpapi.flightmcp.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.serpapi.flightmcp.service.FlightService;
+import com.serpapi.flightmcp.service.TripAdvisorService;
+import com.serpapi.flightmcp.service.YouTubeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -19,10 +21,14 @@ public class McpServer {
     
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final FlightService flightService;
+    private final TripAdvisorService tripAdvisorService;
+    private final YouTubeService youtubeService;
 
-    public McpServer(FlightService flightService) {
+    public McpServer(FlightService flightService, TripAdvisorService tripAdvisorService, YouTubeService youtubeService) {
         this.flightService = flightService;
-        logger.info("McpServer initialized with FlightService");
+        this.tripAdvisorService = tripAdvisorService;
+        this.youtubeService = youtubeService;
+        logger.info("McpServer initialized with FlightService, TripAdvisorService, and YouTubeService");
     }
 
     /**
@@ -52,7 +58,7 @@ public class McpServer {
                             "tools", Map.of()
                         ),
                         "serverInfo", Map.of(
-                            "name", "flight-mcp-server",
+                            "name", "travel-mcp-server",
                             "version", "1.0.0"
                         )
                     )
@@ -83,6 +89,59 @@ public class McpServer {
                                         "date", Map.of("type", "string", "description", "Departure date (YYYY-MM-DD)")
                                     ),
                                     "required", List.of("departure", "arrival", "date")
+                                )
+                            ),
+                            Map.of(
+                                "name", "search_hotels",
+                                "description", "Search for hotels in a specific location using TripAdvisor data",
+                                "inputSchema", Map.of(
+                                    "type", "object",
+                                    "properties", Map.of(
+                                        "location", Map.of("type", "string", "description", "Location to search for hotels"),
+                                        "checkIn", Map.of("type", "string", "description", "Check-in date (YYYY-MM-DD)"),
+                                        "checkOut", Map.of("type", "string", "description", "Check-out date (YYYY-MM-DD)"),
+                                        "adults", Map.of("type", "integer", "description", "Number of adults", "default", 2)
+                                    ),
+                                    "required", List.of("location", "checkIn", "checkOut")
+                                )
+                            ),
+                            Map.of(
+                                "name", "search_restaurants",
+                                "description", "Search for restaurants in a specific location using TripAdvisor data",
+                                "inputSchema", Map.of(
+                                    "type", "object",
+                                    "properties", Map.of(
+                                        "location", Map.of("type", "string", "description", "Location to search for restaurants"),
+                                        "cuisine", Map.of("type", "string", "description", "Optional cuisine type filter")
+                                    ),
+                                    "required", List.of("location")
+                                )
+                            ),
+                            Map.of(
+                                "name", "search_attractions",
+                                "description", "Search for attractions and activities in a specific location using TripAdvisor data",
+                                "inputSchema", Map.of(
+                                    "type", "object",
+                                    "properties", Map.of(
+                                        "location", Map.of("type", "string", "description", "Location to search for attractions"),
+                                        "category", Map.of("type", "string", "description", "Optional category filter (e.g., museums, parks, tours)")
+                                    ),
+                                    "required", List.of("location")
+                                )
+                            ),
+                            Map.of(
+                                "name", "search_youtube_videos",
+                                "description", "Search for YouTube videos using SerpAPI YouTube search",
+                                "inputSchema", Map.of(
+                                    "type", "object",
+                                    "properties", Map.of(
+                                        "query", Map.of("type", "string", "description", "Search query for YouTube videos"),
+                                        "duration", Map.of("type", "string", "description", "Optional duration filter (short, medium, long)"),
+                                        "uploadDate", Map.of("type", "string", "description", "Optional upload date filter (hour, today, week, month, year)"),
+                                        "sortBy", Map.of("type", "string", "description", "Optional sort order (relevance, upload_date, view_count, rating)"),
+                                        "maxResults", Map.of("type", "integer", "description", "Maximum number of results (default: 20, max: 50)", "default", 20)
+                                    ),
+                                    "required", List.of("query")
                                 )
                             )
                         )
@@ -122,47 +181,179 @@ public class McpServer {
         
         logger.info("Executing tool call: {} with arguments: {}", name, arguments);
 
-        if ("search_flights".equals(name)) {
-            try {
-                String departure = (String) arguments.get("departure");
-                String arrival = (String) arguments.get("arrival");
-                String date = (String) arguments.get("date");
-                
-                logger.debug("Calling FlightService.searchFlights with: {}, {}, {}", departure, arrival, date);
-                String flightData = flightService.searchFlights(departure, arrival, date);
-                
-                logger.info("Successfully processed flight search request, returning raw flight data");
-                return Map.of(
-                    "jsonrpc", "2.0",
-                    "id", id,
-                    "result", Map.of(
-                        "content", List.of(Map.of(
-                            "type", "text",
-                            "text", flightData
-                        ))
-                    )
-                );
-            } catch (Exception e) {
-                logger.error("Failed to execute search_flights tool: {}", e.getMessage(), e);
-                return Map.of(
+        return switch (name) {
+            case "search_flights" -> {
+                try {
+                    String departure = (String) arguments.get("departure");
+                    String arrival = (String) arguments.get("arrival");
+                    String date = (String) arguments.get("date");
+                    
+                    logger.debug("Calling FlightService.searchFlights with: {}, {}, {}", departure, arrival, date);
+                    String flightData = flightService.searchFlights(departure, arrival, date);
+                    
+                    logger.info("Successfully processed flight search request, returning raw flight data");
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "result", Map.of(
+                            "content", List.of(Map.of(
+                                "type", "text",
+                                "text", flightData
+                            ))
+                        )
+                    );
+                } catch (Exception e) {
+                    logger.error("Failed to execute search_flights tool: {}", e.getMessage(), e);
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "error", Map.of(
+                            "code", -32000,
+                            "message", "Failed to search flights: " + e.getMessage()
+                        )
+                    );
+                }
+            }
+            case "search_hotels" -> {
+                try {
+                    String location = (String) arguments.get("location");
+                    String checkIn = (String) arguments.get("checkIn");
+                    String checkOut = (String) arguments.get("checkOut");
+                    Integer adults = arguments.get("adults") != null ? (Integer) arguments.get("adults") : 2;
+                    
+                    logger.debug("Calling TripAdvisorService.searchHotels with: {}, {}, {}, {}", location, checkIn, checkOut, adults);
+                    String hotelData = tripAdvisorService.searchHotels(location, checkIn, checkOut, adults);
+                    
+                    logger.info("Successfully processed hotel search request, returning hotel data");
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "result", Map.of(
+                            "content", List.of(Map.of(
+                                "type", "text",
+                                "text", hotelData
+                            ))
+                        )
+                    );
+                } catch (Exception e) {
+                    logger.error("Failed to execute search_hotels tool: {}", e.getMessage(), e);
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "error", Map.of(
+                            "code", -32000,
+                            "message", "Failed to search hotels: " + e.getMessage()
+                        )
+                    );
+                }
+            }
+            case "search_restaurants" -> {
+                try {
+                    String location = (String) arguments.get("location");
+                    String cuisine = (String) arguments.get("cuisine");
+                    
+                    logger.debug("Calling TripAdvisorService.searchRestaurants with: {}, {}", location, cuisine);
+                    String restaurantData = tripAdvisorService.searchRestaurants(location, cuisine);
+                    
+                    logger.info("Successfully processed restaurant search request, returning restaurant data");
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "result", Map.of(
+                            "content", List.of(Map.of(
+                                "type", "text",
+                                "text", restaurantData
+                            ))
+                        )
+                    );
+                } catch (Exception e) {
+                    logger.error("Failed to execute search_restaurants tool: {}", e.getMessage(), e);
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "error", Map.of(
+                            "code", -32000,
+                            "message", "Failed to search restaurants: " + e.getMessage()
+                        )
+                    );
+                }
+            }
+            case "search_attractions" -> {
+                try {
+                    String location = (String) arguments.get("location");
+                    String category = (String) arguments.get("category");
+                    
+                    logger.debug("Calling TripAdvisorService.searchAttractions with: {}, {}", location, category);
+                    String attractionData = tripAdvisorService.searchAttractions(location, category);
+                    
+                    logger.info("Successfully processed attraction search request, returning attraction data");
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "result", Map.of(
+                            "content", List.of(Map.of(
+                                "type", "text",
+                                "text", attractionData
+                            ))
+                        )
+                    );
+                } catch (Exception e) {
+                    logger.error("Failed to execute search_attractions tool: {}", e.getMessage(), e);
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "error", Map.of(
+                            "code", -32000,
+                            "message", "Failed to search attractions: " + e.getMessage()
+                        )
+                    );
+                }
+            }
+            case "search_youtube_videos" -> {
+                try {
+                    String query = (String) arguments.get("query");
+                    String duration = (String) arguments.get("duration");
+                    String uploadDate = (String) arguments.get("uploadDate");
+                    String sortBy = (String) arguments.get("sortBy");
+                    Integer maxResults = arguments.get("maxResults") != null ? (Integer) arguments.get("maxResults") : 20;
+                    
+                    logger.debug("Calling YouTubeService.searchVideos with: {}, {}, {}, {}, {}", query, duration, uploadDate, sortBy, maxResults);
+                    String videoData = youtubeService.searchVideos(query, duration, uploadDate, sortBy, maxResults);
+                    
+                    logger.info("Successfully processed YouTube search request, returning video data");
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "result", Map.of(
+                            "content", List.of(Map.of(
+                                "type", "text",
+                                "text", videoData
+                            ))
+                        )
+                    );
+                } catch (Exception e) {
+                    logger.error("Failed to execute search_youtube_videos tool: {}", e.getMessage(), e);
+                    yield Map.of(
+                        "jsonrpc", "2.0",
+                        "id", id,
+                        "error", Map.of(
+                            "code", -32000,
+                            "message", "Failed to search YouTube videos: " + e.getMessage()
+                        )
+                    );
+                }
+            }
+            default -> {
+                logger.warn("Unknown tool requested: {}", name);
+                yield Map.of(
                     "jsonrpc", "2.0",
                     "id", id,
                     "error", Map.of(
-                        "code", -32000,
-                        "message", "Failed to search flights: " + e.getMessage()
+                        "code", -32601,
+                        "message", "Unknown tool: " + name
                     )
                 );
             }
-        }
-        
-        logger.warn("Unknown tool requested: {}", name);
-        return Map.of(
-            "jsonrpc", "2.0",
-            "id", id,
-            "error", Map.of(
-                "code", -32601,
-                "message", "Unknown tool: " + name
-            )
-        );
+        };
     }
 }

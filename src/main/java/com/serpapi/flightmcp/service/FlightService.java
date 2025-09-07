@@ -3,11 +3,13 @@ package com.serpapi.flightmcp.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.serpapi.flightmcp.config.FlightMcpConfig;
+import com.serpapi.flightmcp.util.DebugUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -30,21 +32,24 @@ public class FlightService {
     public FlightService(FlightMcpConfig.SerpApiConfig apiConfig, FlightMcpConfig.MockDataConfig mockDataConfig) {
         this.apiConfig = apiConfig;
         this.mockDataConfig = mockDataConfig;
-        
+    }
+    
+    @PostConstruct
+    private void init() {
         // Debug: Log initial API key value
-        System.err.println("DEBUG: Initial serpApiKey from @Value: '" + serpApiKey + "'");
+        DebugUtil.debug("Initial serpApiKey from @Value: '" + serpApiKey + "'");
         
         // Also check environment variable as fallback
         String envApiKey = System.getenv("FLIGHT_SERPAPI_KEY");
-        System.err.println("DEBUG: Environment variable FLIGHT_SERPAPI_KEY: '" + envApiKey + "'");
+        DebugUtil.debug("Environment variable FLIGHT_SERPAPI_KEY: '" + envApiKey + "'");
         
         if (serpApiKey == null || serpApiKey.isEmpty()) {
             serpApiKey = envApiKey;
             if (serpApiKey == null) serpApiKey = "";
         }
         
-        System.err.println("DEBUG: Final serpApiKey: '" + serpApiKey + "'");
-        System.err.println("DEBUG: API Key configured: " + !serpApiKey.isEmpty());
+        DebugUtil.debug("Final serpApiKey: '" + serpApiKey + "'");
+        DebugUtil.debug("API Key configured: " + !serpApiKey.isEmpty());
         
         logger.info("FlightService initialized with SERP API config. API Key configured: {}", !serpApiKey.isEmpty());
         if (!serpApiKey.isEmpty()) {
@@ -65,9 +70,9 @@ public class FlightService {
      */
     public String searchFlights(String departure, String arrival, String date) throws Exception {
         // Debug to stderr (won't interfere with JSON)
-        System.err.println("DEBUG: searchFlights called - serpApiKey.isEmpty(): " + serpApiKey.isEmpty());
-        System.err.println("DEBUG: serpApiKey length: " + (serpApiKey != null ? serpApiKey.length() : "null"));
-        System.err.println("DEBUG: Searching: " + departure + " -> " + arrival + " on " + date);
+        DebugUtil.debug("searchFlights called - serpApiKey.isEmpty(): " + serpApiKey.isEmpty());
+        DebugUtil.debug("serpApiKey length: " + (serpApiKey != null ? serpApiKey.length() : "null"));
+        DebugUtil.debug("Searching: " + departure + " -> " + arrival + " on " + date);
         
         logger.info("Searching flights from {} to {} on {}", departure, arrival, date);
         logger.info("API Key status: {}", serpApiKey.isEmpty() ? "EMPTY - using mock data" : "CONFIGURED - using SERP API");
@@ -96,12 +101,12 @@ public class FlightService {
                 .GET()
                 .build();
         
-        System.err.println("DEBUG: About to send SERP API request...");
+        DebugUtil.debug("About to send SERP API request...");
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         
-        System.err.println("DEBUG: SERP API response status: " + response.statusCode());
-        System.err.println("DEBUG: SERP API response body length: " + response.body().length());
-        System.err.println("DEBUG: SERP API response body (first 200 chars): " + response.body().substring(0, Math.min(200, response.body().length())));
+        DebugUtil.debug("SERP API response status: " + response.statusCode());
+        DebugUtil.debug("SERP API response body length: " + response.body().length());
+        DebugUtil.debug("SERP API response body (first 200 chars): " + response.body().substring(0, Math.min(200, response.body().length())));
         
         logger.debug("SERP API response status: {}", response.statusCode());
         
@@ -111,18 +116,18 @@ public class FlightService {
             // Validate that response is valid JSON
             try {
                 objectMapper.readTree(responseBody);
-                System.err.println("DEBUG: SERP API JSON validation passed - using real data");
+                DebugUtil.debug("SERP API JSON validation passed - using real data");
                 logger.info("Successfully retrieved and validated flight data from SERP API");
                 return responseBody;
             } catch (Exception e) {
-                System.err.println("DEBUG: SERP API JSON validation failed: " + e.getMessage());
+                DebugUtil.debug("SERP API JSON validation failed: " + e.getMessage());
                 logger.error("SERP API returned invalid JSON: {}", e.getMessage());
                 logger.warn("Falling back to mock data due to invalid JSON response");
                 return mockFlightData(departure, arrival, date);
             }
         }
         
-        System.err.println("DEBUG: SERP API request failed - falling back to mock data");
+        DebugUtil.debug("SERP API request failed - falling back to mock data");
         logger.warn("SERP API request failed with status {}, response body: {}", response.statusCode(), response.body());
         logger.warn("Falling back to mock data");
         return mockFlightData(departure, arrival, date);
