@@ -422,6 +422,3 @@ flight-mcp-server/
 3. Test with both Claude Desktop and standalone modes
 4. Submit a pull request
 
-## License  
-
-MIT License - see LICENSE file for details
