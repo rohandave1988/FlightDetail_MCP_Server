@@ -421,4 +421,5 @@ flight-mcp-server/
 2. Create a feature branch  
 3. Test with both Claude Desktop and standalone modes
 4. Submit a pull request
+   
 
