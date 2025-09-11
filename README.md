@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/f8ef7c7c-642a-4e46-b075-e1a17740cee2
+
 # Flight & Travel MCP Server
 
 A Spring Boot MCP (Model Context Protocol) server for comprehensive travel and content search capabilities. Integrates with SERP API for real flight data, TripAdvisor travel information, and YouTube video search, providing global search through Claude Desktop integration.
