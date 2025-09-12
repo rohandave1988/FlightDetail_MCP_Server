@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/f8ef7c7c-642a-4e46-b075-e1a17740cee2
+
 # Flight & Travel MCP Server
 
 Spring Boot MCP server for travel search - flights, hotels, restaurants, attractions, and YouTube videos via SERP API.
