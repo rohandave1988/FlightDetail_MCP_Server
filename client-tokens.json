@@ -1,0 +1,43 @@
+{
+  "clients": [
+    {
+      "clientId": "claude-desktop",
+      "clientToken": "claude-desktop-token-12345",
+      "name": "Claude Desktop Client",
+      "description": "Official Claude Desktop integration",
+      "permissions": ["flights", "tripadvisor", "youtube"],
+      "active": true,
+      "createdAt": "2024-01-01T00:00:00Z",
+      "apiKeys": {
+        "FLIGHT_SERPAPI_KEY": "your_flight_serpapi_key_here",
+        "TRIPADVISOR_SERPAPI_KEY": "your_tripadvisor_serpapi_key_here", 
+        "YOUTUBE_SERPAPI_KEY": "your_youtube_serpapi_key_here"
+      }
+    },
+    {
+      "clientId": "python-mcp-client", 
+      "clientToken": "python-client-token-67890",
+      "name": "Python MCP Client",
+      "description": "Custom Python MCP client integration",
+      "permissions": ["flights", "tripadvisor"],
+      "active": true,
+      "createdAt": "2024-01-01T00:00:00Z",
+      "apiKeys": {
+        "FLIGHT_SERPAPI_KEY": "different_flight_key_for_python_client",
+        "TRIPADVISOR_SERPAPI_KEY": "different_tripadvisor_key_for_python_client"
+      }
+    },
+    {
+      "clientId": "test-client",
+      "clientToken": "test-client-token-abcde",
+      "name": "Test Client",
+      "description": "Development and testing client",
+      "permissions": ["flights"],
+      "active": true,
+      "createdAt": "2024-01-01T00:00:00Z",
+      "apiKeys": {
+        "FLIGHT_SERPAPI_KEY": "test_flight_key_limited_usage"
+      }
+    }
+  ]
+}

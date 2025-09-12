@@ -25,13 +25,15 @@ public class FlightService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final FlightMcpConfig.SerpApiConfig apiConfig;
     private final FlightMcpConfig.MockDataConfig mockDataConfig;
+    private final ClientTokenService clientTokenService;
     
     @Value("${flight.serpapi.key:}")
     private String serpApiKey;
     
-    public FlightService(FlightMcpConfig.SerpApiConfig apiConfig, FlightMcpConfig.MockDataConfig mockDataConfig) {
+    public FlightService(FlightMcpConfig.SerpApiConfig apiConfig, FlightMcpConfig.MockDataConfig mockDataConfig, ClientTokenService clientTokenService) {
         this.apiConfig = apiConfig;
         this.mockDataConfig = mockDataConfig;
+        this.clientTokenService = clientTokenService;
     }
     
     @PostConstruct
@@ -65,21 +67,26 @@ public class FlightService {
      * @param departure The departure city or airport code
      * @param arrival The arrival city or airport code  
      * @param date The departure date in YYYY-MM-DD format
+     * @param clientId The client ID to use for API key lookup
      * @return JSON string containing flight search results
      * @throws Exception if the HTTP request fails
      */
-    public String searchFlights(String departure, String arrival, String date) throws Exception {
+    public String searchFlights(String departure, String arrival, String date, String clientId) throws Exception {
+        // Get client-specific API key first
+        String clientApiKey = clientTokenService.getApiKey(clientId, "FLIGHT_SERPAPI_KEY");
+        String apiKeyToUse = clientApiKey != null ? clientApiKey : serpApiKey;
         // Debug to stderr (won't interfere with JSON)
-        DebugUtil.debug("searchFlights called - serpApiKey.isEmpty(): " + serpApiKey.isEmpty());
-        DebugUtil.debug("serpApiKey length: " + (serpApiKey != null ? serpApiKey.length() : "null"));
+        DebugUtil.debug("searchFlights called for client: " + clientId);
+        DebugUtil.debug("Client API key available: " + (clientApiKey != null));
+        DebugUtil.debug("API key to use length: " + (apiKeyToUse != null ? apiKeyToUse.length() : "null"));
         DebugUtil.debug("Searching: " + departure + " -> " + arrival + " on " + date);
         
-        logger.info("Searching flights from {} to {} on {}", departure, arrival, date);
-        logger.info("API Key status: {}", serpApiKey.isEmpty() ? "EMPTY - using mock data" : "CONFIGURED - using SERP API");
+        logger.info("Searching flights from {} to {} on {} for client: {}", departure, arrival, date, clientId);
+        logger.info("Using {} API key", clientApiKey != null ? "client-specific" : "system fallback");
         
-        if (serpApiKey.isEmpty()) {
-            logger.warn("SERP API key not configured, using mock data");
-            return mockFlightData(departure, arrival, date);
+        if (apiKeyToUse == null || apiKeyToUse.isEmpty()) {
+            logger.error("No SERP API key available for client {} and no system fallback", clientId);
+            throw new Exception("SERP API key not configured for client: " + clientId);
         }
         
         logger.debug("Using SERP API for flight search");
@@ -91,7 +98,7 @@ public class FlightService {
             URLEncoder.encode(arrival, StandardCharsets.UTF_8), 
             URLEncoder.encode(date, StandardCharsets.UTF_8), 
             apiConfig.getType(),
-            serpApiKey
+            apiKeyToUse
         );
         
         logger.debug("Making request to SERP API: {}", url.replaceAll("api_key=[^&]*", "api_key=***"));
@@ -157,5 +164,12 @@ public class FlightService {
         
         logger.debug("Mock flight data generated successfully from template");
         return mockData;
+    }
+    
+    /**
+     * Legacy method for backward compatibility - uses system-wide API key
+     */
+    public String searchFlights(String departure, String arrival, String date) throws Exception {
+        return searchFlights(departure, arrival, date, "system");
     }
 }

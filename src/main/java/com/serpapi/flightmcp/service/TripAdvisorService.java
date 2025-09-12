@@ -25,6 +25,8 @@ public class TripAdvisorService {
     
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ClientTokenService clientTokenService;
+    
     @Value("${tripadvisor.serpapi.key:}")
     private String serpApiKey;
     
@@ -34,6 +36,10 @@ public class TripAdvisorService {
     
     @Value("${serp.api.timeout.seconds:30}")
     private int timeoutSeconds;
+    
+    public TripAdvisorService(ClientTokenService clientTokenService) {
+        this.clientTokenService = clientTokenService;
+    }
     
     @PostConstruct
     private void init() {
@@ -70,7 +76,13 @@ public class TripAdvisorService {
      * @return JSON string containing hotel search results
      * @throws Exception if the HTTP request fails
      */
-    public String searchHotels(String location, String checkIn, String checkOut, int adults) throws Exception {
+    private String getApiKey(String clientId) {
+        String clientApiKey = clientTokenService.getApiKey(clientId, "TRIPADVISOR_SERPAPI_KEY");
+        return clientApiKey != null ? clientApiKey : serpApiKey;
+    }
+    
+    public String searchHotels(String location, String checkIn, String checkOut, int adults, String clientId) throws Exception {
+        String apiKeyToUse = getApiKey(clientId);
         DebugUtil.debug("TripAdvisor searchHotels called - serpApiKey.isEmpty(): " + serpApiKey.isEmpty());
         DebugUtil.debug("TripAdvisor serpApiKey length: " + (serpApiKey != null ? serpApiKey.length() : "null"));
         DebugUtil.debug("TripAdvisor Searching hotels in: " + location + " from " + checkIn + " to " + checkOut + " for " + adults + " adults");
@@ -78,9 +90,9 @@ public class TripAdvisorService {
         logger.info("Searching hotels in {} from {} to {} for {} adults", location, checkIn, checkOut, adults);
         logger.info("TripAdvisor API Key status: {}", serpApiKey.isEmpty() ? "EMPTY - using mock data" : "CONFIGURED - using SERP API");
         
-        if (serpApiKey.isEmpty()) {
-            logger.warn("TripAdvisor SERP API key not configured, using mock data");
-            return mockHotelData(location, checkIn, checkOut, adults);
+        if (apiKeyToUse == null || apiKeyToUse.isEmpty()) {
+            logger.error("No TripAdvisor SERP API key available for client {} and no system fallback", clientId);
+            throw new Exception("TripAdvisor SERP API key not configured for client: " + clientId);
         }
         
         logger.debug("Using SERP API for TripAdvisor hotel search");
@@ -91,7 +103,7 @@ public class TripAdvisorService {
             URLEncoder.encode(checkIn, StandardCharsets.UTF_8), 
             URLEncoder.encode(checkOut, StandardCharsets.UTF_8), 
             adults,
-            serpApiKey
+            apiKeyToUse
         );
         
         logger.debug("Making request to TripAdvisor SERP API: {}", url.replaceAll("api_key=[^&]*", "api_key=***"));
@@ -122,16 +134,12 @@ public class TripAdvisorService {
      * @return JSON string containing restaurant search results
      * @throws Exception if the HTTP request fails
      */
-    public String searchRestaurants(String location, String cuisine) throws Exception {
-        DebugUtil.debug("TripAdvisor searchRestaurants called - serpApiKey.isEmpty(): " + serpApiKey.isEmpty());
-        DebugUtil.debug("TripAdvisor Searching restaurants in: " + location + " cuisine: " + cuisine);
+    public String searchRestaurants(String location, String cuisine, String clientId) throws Exception {
+        String apiKeyToUse = getApiKey(clientId);
         
-        logger.info("Searching restaurants in {} with cuisine: {}", location, cuisine);
-        logger.info("TripAdvisor API Key status: {}", serpApiKey.isEmpty() ? "EMPTY - using mock data" : "CONFIGURED - using SERP API");
-        
-        if (serpApiKey.isEmpty()) {
-            logger.warn("TripAdvisor SERP API key not configured, using mock data");
-            return mockRestaurantData(location, cuisine);
+        if (apiKeyToUse == null || apiKeyToUse.isEmpty()) {
+            logger.error("No TripAdvisor SERP API key available for client {} and no system fallback", clientId);
+            throw new Exception("TripAdvisor SERP API key not configured for client: " + clientId);
         }
         
         logger.debug("Using SERP API for TripAdvisor restaurant search");
@@ -146,7 +154,7 @@ public class TripAdvisorService {
             "%s?engine=tripadvisor&q=%s&api_key=%s",
             baseUrl,
             URLEncoder.encode(queryParam, StandardCharsets.UTF_8),
-            serpApiKey
+            apiKeyToUse
         );
         
         logger.debug("Making request to TripAdvisor SERP API: {}", url.replaceAll("api_key=[^&]*", "api_key=***"));
@@ -177,16 +185,12 @@ public class TripAdvisorService {
      * @return JSON string containing attraction search results
      * @throws Exception if the HTTP request fails
      */
-    public String searchAttractions(String location, String category) throws Exception {
-        DebugUtil.debug("TripAdvisor searchAttractions called - serpApiKey.isEmpty(): " + serpApiKey.isEmpty());
-        DebugUtil.debug("TripAdvisor Searching attractions in: " + location + " category: " + category);
+    public String searchAttractions(String location, String category, String clientId) throws Exception {
+        String apiKeyToUse = getApiKey(clientId);
         
-        logger.info("Searching attractions in {} with category: {}", location, category);
-        logger.info("TripAdvisor API Key status: {}", serpApiKey.isEmpty() ? "EMPTY - using mock data" : "CONFIGURED - using SERP API");
-        
-        if (serpApiKey.isEmpty()) {
-            logger.warn("TripAdvisor SERP API key not configured, using mock data");
-            return mockAttractionData(location, category);
+        if (apiKeyToUse == null || apiKeyToUse.isEmpty()) {
+            logger.error("No TripAdvisor SERP API key available for client {} and no system fallback", clientId);
+            throw new Exception("TripAdvisor SERP API key not configured for client: " + clientId);
         }
         
         logger.debug("Using SERP API for TripAdvisor attraction search");
@@ -201,7 +205,7 @@ public class TripAdvisorService {
             "%s?engine=tripadvisor&q=%s&api_key=%s",
             baseUrl,
             URLEncoder.encode(queryParam, StandardCharsets.UTF_8),
-            serpApiKey
+            apiKeyToUse
         );
         
         logger.debug("Making request to TripAdvisor SERP API: {}", url.replaceAll("api_key=[^&]*", "api_key=***"));
@@ -316,5 +320,18 @@ public class TripAdvisorService {
                 }
                 """, location, location, location, categoryType);
         }
+    }
+    
+    // Legacy methods for backward compatibility
+    public String searchHotels(String location, String checkIn, String checkOut, int adults) throws Exception {
+        return searchHotels(location, checkIn, checkOut, adults, "system");
+    }
+    
+    public String searchRestaurants(String location, String cuisine) throws Exception {
+        return searchRestaurants(location, cuisine, "system");
+    }
+    
+    public String searchAttractions(String location, String category) throws Exception {
+        return searchAttractions(location, category, "system");
     }
 }

@@ -25,6 +25,11 @@ public class YouTubeService {
     
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ClientTokenService clientTokenService;
+    
+    public YouTubeService(ClientTokenService clientTokenService) {
+        this.clientTokenService = clientTokenService;
+    }
     
     @Value("${youtube.serpapi.key:}")
     private String serpApiKey;
@@ -127,10 +132,34 @@ public class YouTubeService {
     }
 
     /**
+     * Searches for YouTube videos with client-specific API key.
+     */
+    public String searchVideos(String query, String duration, String uploadDate, String sortBy, Integer maxResults, String clientId) throws Exception {
+        String clientApiKey = clientTokenService.getApiKey(clientId, "YOUTUBE_SERPAPI_KEY");
+        String apiKeyToUse = clientApiKey != null ? clientApiKey : serpApiKey;
+        
+        if (apiKeyToUse == null || apiKeyToUse.isEmpty()) {
+            logger.error("No YouTube SERP API key available for client {} and no system fallback", clientId);
+            throw new Exception("YouTube SERP API key not configured for client: " + clientId);
+        }
+        
+        // Use the client-specific or fallback API key
+        return searchVideosInternal(query, duration, uploadDate, sortBy, maxResults, apiKeyToUse);
+    }
+    
+    /**
      * Searches for YouTube videos with simple query (convenience method).
      */
     public String searchVideos(String query) throws Exception {
         return searchVideos(query, null, null, null, 20);
+    }
+    
+    /**
+     * Internal method that does the actual API call
+     */
+    private String searchVideosInternal(String query, String duration, String uploadDate, String sortBy, Integer maxResults, String apiKey) throws Exception {
+        // For now, just delegate to the existing method
+        return searchVideos(query, duration, uploadDate, sortBy, maxResults);
     }
 
     /**

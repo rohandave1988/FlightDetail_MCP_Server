@@ -1,24 +1,8 @@
 server:
   port: 8080
 
-# Flight Service Configuration
-flight:
-  serpapi:
-    key:  ${FLIGHT_SERPAPI_KEY:}  # Gets value from environment variable FLIGHT_SERPAPI_KEY
-
-# TripAdvisor Service Configuration
-tripadvisor:
-  serpapi:
-    key: ${TRIPADVISOR_SERPAPI_KEY:}  # Gets value from environment variable TRIPADVISOR_SERPAPI_KEY
-
-# YouTube Service Configuration
-youtube:
-  serpapi:
-    key: ${YOUTUBE_SERPAPI_KEY:}  # Gets value from environment variable YOUTUBE_SERPAPI_KEY
-
-# Legacy SerpAPI configuration for backward compatibility  
-serpapi:
-  key: ${FLIGHT_SERPAPI_KEY:}
+# API keys are now managed via client-tokens.json
+# No environment variables needed for API keys
 
 # Logging Configuration
 logging:

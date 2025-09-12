@@ -1,6 +1,7 @@
 package com.serpapi.flightmcp.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.serpapi.flightmcp.service.ClientTokenService;
 import com.serpapi.flightmcp.service.FlightService;
 import com.serpapi.flightmcp.service.TripAdvisorService;
 import com.serpapi.flightmcp.service.YouTubeService;
@@ -23,12 +24,54 @@ public class McpServer {
     private final FlightService flightService;
     private final TripAdvisorService tripAdvisorService;
     private final YouTubeService youtubeService;
+    private final ClientTokenService clientTokenService;
 
-    public McpServer(FlightService flightService, TripAdvisorService tripAdvisorService, YouTubeService youtubeService) {
+    public McpServer(FlightService flightService, TripAdvisorService tripAdvisorService, YouTubeService youtubeService, ClientTokenService clientTokenService) {
         this.flightService = flightService;
         this.tripAdvisorService = tripAdvisorService;
         this.youtubeService = youtubeService;
-        logger.info("McpServer initialized with FlightService, TripAdvisorService, and YouTubeService");
+        this.clientTokenService = clientTokenService;
+        logger.info("McpServer initialized with FlightService, TripAdvisorService, YouTubeService, and ClientTokenService");
+    }
+
+    /**
+     * Validates client token from environment variables
+     * 
+     * @return Map with validation result and client info
+     */
+    private Map<String, Object> validateClientToken() {
+        String clientId = System.getenv("MCP_CLIENT_ID");
+        String clientToken = System.getenv("MCP_CLIENT_TOKEN");
+        
+        if (clientId == null || clientToken == null) {
+            logger.warn("Client validation failed: MCP_CLIENT_ID or MCP_CLIENT_TOKEN environment variables not set");
+            return Map.of("valid", false, "error", "Client credentials not provided");
+        }
+        
+        boolean isValid = clientTokenService.validateClientToken(clientId, clientToken);
+        if (!isValid) {
+            logger.warn("Client validation failed for clientId: {}", clientId);
+            return Map.of("valid", false, "error", "Invalid client credentials");
+        }
+        
+        ClientTokenService.ClientInfo clientInfo = clientTokenService.getClientInfo(clientId);
+        logger.info("Client validated successfully: {} ({})", clientInfo.name, clientId);
+        return Map.of("valid", true, "clientInfo", clientInfo);
+    }
+    
+    /**
+     * Gets the required permission for a tool
+     * 
+     * @param toolName The name of the tool
+     * @return The required permission, or null if no specific permission is needed
+     */
+    private String getRequiredPermission(String toolName) {
+        return switch (toolName) {
+            case "search_flights" -> "flights";
+            case "search_hotels", "search_restaurants", "search_attractions" -> "tripadvisor";
+            case "search_youtube_videos" -> "youtube";
+            default -> null;
+        };
     }
 
     /**
@@ -175,11 +218,42 @@ public class McpServer {
     @SuppressWarnings("unchecked")
     private Map<String, Object> handleToolCall(Map<String, Object> request) {
         Object id = request.get("id");
+        
+        // Validate client token
+        Map<String, Object> validation = validateClientToken();
+        if (!(Boolean) validation.get("valid")) {
+            logger.error("Tool call rejected due to invalid client credentials");
+            return Map.of(
+                "jsonrpc", "2.0",
+                "id", id,
+                "error", Map.of(
+                    "code", -32001,
+                    "message", "Unauthorized: " + validation.get("error")
+                )
+            );
+        }
+        
+        ClientTokenService.ClientInfo clientInfo = (ClientTokenService.ClientInfo) validation.get("clientInfo");
+        
         Map<String, Object> params = (Map<String, Object>) request.get("params");
         String name = (String) params.get("name");
         Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");
         
-        logger.info("Executing tool call: {} with arguments: {}", name, arguments);
+        // Check if client has permission for this tool
+        String requiredPermission = getRequiredPermission(name);
+        if (requiredPermission != null && !clientInfo.permissions.contains(requiredPermission)) {
+            logger.warn("Client {} does not have permission for tool: {}", clientInfo.clientId, name);
+            return Map.of(
+                "jsonrpc", "2.0",
+                "id", id,
+                "error", Map.of(
+                    "code", -32002,
+                    "message", "Forbidden: Client does not have permission to use tool: " + name
+                )
+            );
+        }
+        
+        logger.info("Executing tool call: {} with arguments: {} for client: {}", name, arguments, clientInfo.name);
 
         return switch (name) {
             case "search_flights" -> {
@@ -188,8 +262,8 @@ public class McpServer {
                     String arrival = (String) arguments.get("arrival");
                     String date = (String) arguments.get("date");
                     
-                    logger.debug("Calling FlightService.searchFlights with: {}, {}, {}", departure, arrival, date);
-                    String flightData = flightService.searchFlights(departure, arrival, date);
+                    logger.debug("Calling FlightService.searchFlights with: {}, {}, {} for client: {}", departure, arrival, date, clientInfo.clientId);
+                    String flightData = flightService.searchFlights(departure, arrival, date, clientInfo.clientId);
                     
                     logger.info("Successfully processed flight search request, returning raw flight data");
                     yield Map.of(
@@ -221,8 +295,8 @@ public class McpServer {
                     String checkOut = (String) arguments.get("checkOut");
                     Integer adults = arguments.get("adults") != null ? (Integer) arguments.get("adults") : 2;
                     
-                    logger.debug("Calling TripAdvisorService.searchHotels with: {}, {}, {}, {}", location, checkIn, checkOut, adults);
-                    String hotelData = tripAdvisorService.searchHotels(location, checkIn, checkOut, adults);
+                    logger.debug("Calling TripAdvisorService.searchHotels with: {}, {}, {}, {} for client: {}", location, checkIn, checkOut, adults, clientInfo.clientId);
+                    String hotelData = tripAdvisorService.searchHotels(location, checkIn, checkOut, adults, clientInfo.clientId);
                     
                     logger.info("Successfully processed hotel search request, returning hotel data");
                     yield Map.of(
@@ -252,8 +326,8 @@ public class McpServer {
                     String location = (String) arguments.get("location");
                     String cuisine = (String) arguments.get("cuisine");
                     
-                    logger.debug("Calling TripAdvisorService.searchRestaurants with: {}, {}", location, cuisine);
-                    String restaurantData = tripAdvisorService.searchRestaurants(location, cuisine);
+                    logger.debug("Calling TripAdvisorService.searchRestaurants with: {}, {} for client: {}", location, cuisine, clientInfo.clientId);
+                    String restaurantData = tripAdvisorService.searchRestaurants(location, cuisine, clientInfo.clientId);
                     
                     logger.info("Successfully processed restaurant search request, returning restaurant data");
                     yield Map.of(
@@ -283,8 +357,8 @@ public class McpServer {
                     String location = (String) arguments.get("location");
                     String category = (String) arguments.get("category");
                     
-                    logger.debug("Calling TripAdvisorService.searchAttractions with: {}, {}", location, category);
-                    String attractionData = tripAdvisorService.searchAttractions(location, category);
+                    logger.debug("Calling TripAdvisorService.searchAttractions with: {}, {} for client: {}", location, category, clientInfo.clientId);
+                    String attractionData = tripAdvisorService.searchAttractions(location, category, clientInfo.clientId);
                     
                     logger.info("Successfully processed attraction search request, returning attraction data");
                     yield Map.of(
@@ -317,8 +391,8 @@ public class McpServer {
                     String sortBy = (String) arguments.get("sortBy");
                     Integer maxResults = arguments.get("maxResults") != null ? (Integer) arguments.get("maxResults") : 20;
                     
-                    logger.debug("Calling YouTubeService.searchVideos with: {}, {}, {}, {}, {}", query, duration, uploadDate, sortBy, maxResults);
-                    String videoData = youtubeService.searchVideos(query, duration, uploadDate, sortBy, maxResults);
+                    logger.debug("Calling YouTubeService.searchVideos with: {}, {}, {}, {}, {} for client: {}", query, duration, uploadDate, sortBy, maxResults, clientInfo.clientId);
+                    String videoData = youtubeService.searchVideos(query, duration, uploadDate, sortBy, maxResults, clientInfo.clientId);
                     
                     logger.info("Successfully processed YouTube search request, returning video data");
                     yield Map.of(

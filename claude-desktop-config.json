@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "travel-search": {
+      "command": "java",
+      "args": [
+        "-jar",
+        "/path/to/your/flight-mcp-server-1.0.0.jar",
+        "--stdio"
+      ],
+      "env": {
+        "MCP_STDIO": "true",
+        "SPRING_MAIN_WEB_APPLICATION_TYPE": "none",
+        "MCP_CLIENT_ID": "claude-desktop",
+        "MCP_CLIENT_TOKEN": "claude-desktop-token-12345"
+      }
+    }
+  }
+}
